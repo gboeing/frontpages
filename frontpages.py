@@ -156,6 +156,7 @@ def make_status(name, place, paper_link, local_date=None):
 
 # In[ ]:
 
+script_start_time = time.time()
 log('script started')
 config_str = ', '.join(['{}={}'.format(item, getattr(config, item)) for item in dir(config) if not item.startswith('_')])
 log('config: {}'.format(config_str))
@@ -268,3 +269,6 @@ for paper in papers_sample:
         log(e, level=lg.ERROR)
         time.sleep(config.pause_error)
 
+# all done
+script_elapsed_time = time.time() - script_start_time
+log('script finished in {}'.format(datetime.timedelta(seconds=int(script_elapsed_time))))
