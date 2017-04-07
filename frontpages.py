@@ -5,22 +5,11 @@
 
 # In[ ]:
 
-import os, time, datetime, random, re, logging as lg
+import os, time, datetime, random, logging as lg
 import requests, bs4
+import config
 from abbrev_state import abbrev_state
 from twitter_keys import consumer_key, consumer_secret, access_token_key, access_token_secret
-
-
-# In[ ]:
-
-# configure script
-pause_duration = 60 * 15  #time to pause between tweets, seconds x minutes
-pause_error = 60 * 30     #time to pause after an error, seconds x minutes
-n = 40                    #sample n papers to tweet
-usa_proportion = 0.5      #what share of the sample should be from USA
-log_folder = 'logs'       #folder to save log files
-img_folder = 'images'     #folder to save image files
-img_folder_date = False   #add a date subfolder to save the images
 
 
 # ## Define functions
@@ -43,7 +32,7 @@ def log(message, level=lg.INFO, name='fp', filename='fp'):
 
 # In[ ]:
 
-def get_logger(level, name, filename, folder=log_folder):
+def get_logger(level, name, filename, folder=config.log_folder):
     
     logger = lg.getLogger(name)
     
@@ -97,7 +86,7 @@ def get_papers_sample(papers, n, usa_proportion):
 # In[ ]:
 
 # function to download an image from url to save folder
-def download_image(paper_id, img_filepath, url, pause_duration=0):
+def download_image(paper_id, img_filepath, url):
     start_time = time.time()
     img_data = requests.get(url).content
     with open(img_filepath, mode) as handler:
@@ -146,9 +135,8 @@ def geocode(query):
     if len(results) > 0 and 'lat' in results[0] and 'lon' in results[0]:
         lat = float(results[0]['lat'])
         lng = float(results[0]['lon'])
-        point = (lat, lng)
-        log('geocoded "{}" to {} in {:,.2f} seconds'.format(query, point, time.time()-start_time))
-        return point
+        log('geocoded "{}" to {} in {:,.2f} seconds'.format(query, (lat, lng), time.time()-start_time))
+        return lat, lng
     else:
         log('geocoder returned no results for query "{}"'.format(query), level=lg.WARN)
         return None, None
@@ -158,8 +146,6 @@ def geocode(query):
 
 def make_status(name, place, paper_link, local_date=None):
     if local_date is None:
-        day_of_week = datetime.datetime.today().strftime('%A')
-        today_date = datetime.datetime.today().strftime('%d %B %Y').lstrip('0')
         status = 'Today\'s front page from:\n{}\n{}\n{}'.format(name, place, paper_link)
     else:
         status = '{}\n{}\n{}\n{}'.format(name, place, local_date, paper_link)
@@ -171,11 +157,8 @@ def make_status(name, place, paper_link, local_date=None):
 # In[ ]:
 
 log('script started')
-log('pause_duration={}, n={}, usa_proportion={}, img_folder="{}", log_folder="{}"'.format(pause_duration, 
-                                                                                          n, 
-                                                                                          usa_proportion, 
-                                                                                          img_folder,
-                                                                                          log_folder))
+config_str = ', '.join(['{}={}'.format(item, getattr(config, item)) for item in dir(config) if not item.startswith('_')])
+log('config: {}'.format(config_str))
 
 
 # In[ ]:
@@ -221,7 +204,7 @@ log('extracted and cleaned newspaper details')
 
 # In[ ]:
 
-papers_sample = get_papers_sample(papers, n, usa_proportion)
+papers_sample = get_papers_sample(papers=papers, n=config.n, usa_proportion=config.usa_proportion)
 
 
 # ## Prep image saving
@@ -233,11 +216,11 @@ mode = 'wb'
 file_ext = 'jpg'
 
 # create image save folder name
-if img_folder_date:
-    img_folder_date = datetime.datetime.today().strftime('%Y%m%d')
-    save_folder = '{}/{}'.format(img_folder, img_folder_date)
+if config.img_folder_date:
+    yyyymmdd = datetime.datetime.today().strftime('%Y%m%d')
+    save_folder = '{}/{}'.format(config.img_folder, yyyymmdd)
 else:
-    save_folder = img_folder
+    save_folder = config.img_folder
 
 # if it doesn't already exist, create the image save folder
 if not os.path.exists(save_folder):
@@ -280,8 +263,8 @@ for paper in papers_sample:
             # otherwise we have lat/lng, so tweet the status + image + location coordinates
             result = api.PostUpdate(status=status, media=img_filepath, latitude=lat, longitude=lng, display_coordinates=True)
         log('tweeted "{}" with media "{}" in {:,.2f} seconds'.format(repr(status), img_filepath, time.time()-start_time))
-        time.sleep(pause_duration)
+        time.sleep(config.pause_duration)
     except Exception as e:
         log(e, level=lg.ERROR)
-        time.sleep(pause_error)
+        time.sleep(config.pause_error)
 
