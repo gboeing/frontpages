@@ -193,8 +193,8 @@ for paper in papers:
         place = place.replace(' USA', ', USA')
         place_parts = place.split(', ')
         if len(place_parts) == 3 and place_parts[2] == 'USA':
-            state = paper['id'].split('_')[0]
-            place_parts[1] = abbrev_state[state]
+            abbrev = paper['id'].split('_')[0]
+            place_parts[1] = abbrev_state[abbrev]
         paper['place'] = ', '.join(place_parts)
     except:
         pass
@@ -256,7 +256,7 @@ for paper in papers_sample:
         status = make_status(paper['name'], paper['place'], paper_link, local_date=local_date)
         
         start_time = time.time()
-        if lat is None and lng is None:
+        if lat is None or lng is None:
             # tweet just the status + image
             result = api.PostUpdate(status=status, media=img_filepath)
         else:
