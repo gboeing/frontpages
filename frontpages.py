@@ -7,6 +7,7 @@
 
 import os, time, datetime, random, logging as lg
 import requests, bs4
+from unidecode import unidecode
 import config
 from abbrev_state import abbrev_state
 from twitter_keys import consumer_key, consumer_secret, access_token_key, access_token_secret
@@ -33,20 +34,20 @@ def log(message, level=lg.INFO, name='fp', filename='fp'):
 # In[ ]:
 
 def get_logger(level, name, filename, folder=config.log_folder):
-    
+
     logger = lg.getLogger(name)
-    
+
     # if a logger with this name is not already set up
     if not getattr(logger, 'handler_set', None):
-        
+
         # get today's date and construct a log filename
         todays_date = datetime.datetime.today().strftime('%Y_%m_%d')
         log_filename = '{}/{}_{}.log'.format(folder, filename, todays_date)
-        
+
         # if the logs folder does not already exist, create it
         if not os.path.exists(folder):
             os.makedirs(folder)
-            
+
         # create file handler and log formatter and set them up
         handler = lg.FileHandler(log_filename, encoding='utf-8')
         formatter = lg.Formatter('%(asctime)s %(levelname)s %(message)s')
@@ -54,31 +55,32 @@ def get_logger(level, name, filename, folder=config.log_folder):
         logger.addHandler(handler)
         logger.setLevel(level)
         logger.handler_set = True
-    
+
     return logger
 
 
 # In[ ]:
 
+# sample n papers from the total
 def get_papers_sample(papers, n, usa_proportion):
-    
+
     usa_papers = [paper for paper in papers if 'USA' in paper['place']]
     world_papers = [paper for paper in papers if 'USA' not in paper['place']]
-    log('we have {} papers: {} from USA and {} from elsewhere'.format(len(papers), 
-                                                                      len(usa_papers), 
+    log('we have {} papers: {} from USA and {} from elsewhere'.format(len(papers),
+                                                                      len(usa_papers),
                                                                       len(world_papers)))
-    
+
     random.shuffle(usa_papers)
     usa_papers_sample = usa_papers[:int(n*usa_proportion)]
-    
+
     random.shuffle(world_papers)
     world_papers_sample = world_papers[:int(n*(1-usa_proportion))]
-    
+
     papers_sample = usa_papers_sample + world_papers_sample
     random.shuffle(papers_sample)
-    
-    log('sampled {} papers: {} from USA and {} from elsewhere'.format(len(papers_sample), 
-                                                                      len(usa_papers_sample), 
+
+    log('sampled {} papers: {} from USA and {} from elsewhere'.format(len(papers_sample),
+                                                                      len(usa_papers_sample),
                                                                       len(world_papers_sample)))
     return papers_sample
 
@@ -96,41 +98,57 @@ def download_image(paper_id, img_filepath, url):
 
 # In[ ]:
 
+# get the paper's homepage url, img url, and local date
 def get_paper_links_date(paper_id, url_template='http://www.newseum.org/todaysfrontpages/?tfp_id={}'):
-    
+
     start_time = time.time()
     url = url_template.format(paper_id)
     response = requests.get(url)
     content = response.content.decode('utf-8')
     soup = bs4.BeautifulSoup(content, 'html5lib')
-    
+
     # get the link to the newspaper's homepage
     item = soup.find('span', {'class':'fa fa-external-link'}).find_parent('a')
     paper_link = item['href']
-    
+
     # get the link to the image
     item = soup.find('p', {'class':'tfp-thumbnail'}).a
     img_link = item['href']
-    
+
     # get the current local date
     item = soup.find('div', {'class':'tfp-pane-detail'}).h4
     local_date = item.text
-    
+
     log('retrieved/parsed local date, newspaper link, and image url in {:,.2f} seconds'.format(time.time()-start_time))
     return paper_link, img_link, local_date
 
 
 # In[ ]:
 
+# return True if the URL works
+def validate_url(url):
+    url_ok = False
+    try:
+        response = requests.get(url)
+        if response.status_code < 400:
+            url_ok = True
+    except:
+        pass
+    return url_ok
+
+
+# In[ ]:
+
+# getcode place to lat lng
 def geocode(query):
-    
+
     # send the query to the nominatim geocoder and parse the json response
     start_time = time.time()
     url_template = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q={}'
     url = url_template.format(query)
     response = requests.get(url, timeout=60)
     results = response.json()
-    
+
     # if results were returned, parse lat and long out of the result
     if len(results) > 0 and 'lat' in results[0] and 'lon' in results[0]:
         lat = float(results[0]['lat'])
@@ -144,6 +162,7 @@ def geocode(query):
 
 # In[ ]:
 
+# make the text of the tweet
 def make_status(name, place, paper_link, local_date=None):
     if local_date is None:
         status = 'Today\'s front page from:\n{}\n{}\n{}'.format(name, place, paper_link)
@@ -186,7 +205,7 @@ for item in items:
     paper['name'] = item.a.em.text
     paper['place'] = item.small.text
     papers.append(paper)
-    
+
 # try to clean up US state place strings by replacing weird abbrevs with name instead
 for paper in papers:
     try:
@@ -248,14 +267,21 @@ log('logged into twitter as "{}" id={} in {:,.2f} seconds'.format(user['screen_n
 # tweet each paper
 for paper in papers_sample:
     try:
-        # get link to paper, download image, geocode place, then make status
+        # get link to paper, link to image, and local date
         log('processing "{}"'.format(paper['id']))
         img_filepath = '{}/{}.{}'.format(save_folder, paper['id'], file_ext)
         paper_link, img_link, local_date = get_paper_links_date(paper['id'])
+
+        # if the link is not valid, make it the duckduckgo "i'm feeling lucky" query for paper name + place
+        # convert accents/diacritics to ascii approximations to not break link on twitter
+        if not validate_url(paper_link):
+            paper_link = unidecode('https://duckduckgo.com/?q=!ducky+{}+{}'.format(paper['name'], paper['place']).replace(' ', '+').replace(',', ''))
+
+        # download the front page image, geocode place, make status
         download_image(paper['id'], img_filepath, url=img_link)
         lat, lng = geocode(paper['place'])
         status = make_status(paper['name'], paper['place'], paper_link, local_date=local_date)
-        
+
         start_time = time.time()
         if lat is None or lng is None:
             # tweet just the status + image
