@@ -6,7 +6,7 @@
 # In[ ]:
 
 import os, time, datetime, random, logging as lg
-import requests, bs4
+import requests, bs4, twitter
 from unidecode import unidecode
 import config
 from abbrev_state import abbrev_state
@@ -252,7 +252,6 @@ if not os.path.exists(save_folder):
 # In[ ]:
 
 # connect to the twitter api
-import twitter
 start_time = time.time()
 api = twitter.Api(consumer_key=consumer_key,
                   consumer_secret=consumer_secret,
