@@ -139,7 +139,7 @@ def validate_url(url):
 
 # In[ ]:
 
-# getcode place to lat lng
+# geocode place to lat lng
 def geocode(query):
 
     # send the query to the nominatim geocoder and parse the json response
