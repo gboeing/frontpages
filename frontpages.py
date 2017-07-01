@@ -274,7 +274,7 @@ for paper in papers_sample:
         # if the link is not valid, make it the duckduckgo "i'm feeling lucky" query for paper name + place
         # convert accents/diacritics to ascii approximations to not break link on twitter
         if not validate_url(paper_link):
-            paper_link = unidecode('https://duckduckgo.com/?q=!ducky+{}+{}'.format(paper['name'], paper['place']).replace(' ', '+').replace(',', ''))
+            paper_link = unidecode('https://duckduckgo.com/?q=!ducky+newspaper+{}+{}'.format(paper['name'], paper['place']).replace(' ', '+').replace(',', ''))
 
         # download the front page image, geocode place, make status
         download_image(paper['id'], img_filepath, url=img_link)
